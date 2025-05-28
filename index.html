@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Okta Auth</title>
+<script src="https://global.oktacdn.com/okta-auth-js/7.7.0/okta-auth-js.min.js"></script>
+<script>
+  const baseOktaURL = "baseOktaURL"; 
+  // Replace with your actual Okta base URL
+  // Example: "https://dev-123456.okta.com"
+  // Ensure this URL is set correctly in your Okta application settings
+  // and matches the issuer URL in your Okta application configuration.
+  // Note: Do not include the trailing slash in the baseOktaURL.
+  const appClientID = "`appClientID`"; 
+  // Replace with your actual Okta application client ID
+  // Example: "0oa1234567890abcdefg"
+
+  const authClient = new OktaAuth({
+    url: baseOktaURL,
+    clientId: appClientID,
+    redirectUri: "http://localhost:9000/", 
+    issuer: baseOktaURL,
+    scopes: ['openid', 'profile', 'email']
+  });
+
+  window.addEventListener('load', () => {
+    const contentDiv = document.getElementById('content-jwt');
+    const loginBtn = document.getElementById('login-btn');
+
+    if (authClient.isLoginRedirect()) {
+      authClient.token.parseFromUrl()
+        .then(data => {
+          const { idToken } = data.tokens;
+          contentDiv.innerHTML = `
+            <p><b>Email:</b> ${idToken.claims.email}</p>
+            <p><b>Subject:</b> ${idToken.claims.sub}</p>
+            <p><b>Client ID:</b> ${authClient.options.clientId}</p>
+            <p><b>Issuer:</b> ${authClient.options.issuer}</p>
+            <pre>${JSON.stringify(idToken, null, 2)}</pre>
+          `;
+          loginBtn.style.display = "none";
+        })
+        .catch(err => {
+          console.error("Token parse error:", err);
+          if (err.message && err.message.includes("OAuthError: User is not assigned to the client application.")) {
+            contentDiv.innerHTML = `<p style="color:red;">Access denied: Your user is not assigned to this application. Please contact your administrator.</p>`;
+          } else {
+            contentDiv.innerHTML = `<p style="color:red;">An unexpected authentication error occurred. Please try again.</p>`;
+          }
+          loginBtn.style.display = "block";
+        });
+    } else {
+      authClient.tokenManager.get('idToken')
+        .then(token => {
+          if (!token) {
+            loginBtn.style.display = "block";
+          } else {
+            loginBtn.style.display = "none";
+          }
+        });
+    }
+
+    loginBtn.onclick = function() {
+      authClient.token.getWithRedirect({ responseType: ['id_token'] });
+    };
+  });
+</script>
+</head>
+
+<body>
+  <h2>Okta Auth </h2>
+  <hr />
+  <div id="content-jwt">
+    <!-- Auth info or errors will show here -->
+  </div>
+  <hr />
+  <button id="login-btn" style="display:none;">Log In</button>
+  <button onclick="authClient.signOut({ postLogoutRedirectUri: 'http://localhost:9000/' });">Sign Out</button>
+</body>
+</html>
